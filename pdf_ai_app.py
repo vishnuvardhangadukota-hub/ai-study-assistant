@@ -9,7 +9,7 @@ from langchain_community.vectorstores import FAISS
 from langchain_community.embeddings import HuggingFaceEmbeddings
 
 # 🔑 Add your API key here
-client = Groq(api_key="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")
+client = Groq(api_key="")
 
 st.set_page_config(page_title="AI Study Assistant", layout="wide")
 
