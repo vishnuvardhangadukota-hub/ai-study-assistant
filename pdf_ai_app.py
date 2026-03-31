@@ -1,19 +1,33 @@
 import streamlit as st
 import tempfile
 import datetime
+import os
 from groq import Groq
+from reportlab.platypus import SimpleDocTemplate, Paragraph
+from reportlab.lib.styles import getSampleStyleSheet
 
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import CharacterTextSplitter
 from langchain_community.vectorstores import FAISS
 from langchain_community.embeddings import HuggingFaceEmbeddings
 
-# 🔑 Add your API key here
-client = Groq(api_key="")
+# API
+client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
 st.set_page_config(page_title="AI Study Assistant", layout="wide")
 
-st.title("🌐 AI Study Assistant ")
+# Sidebar
+with st.sidebar:
+    st.title("⚙️ Settings")
+    st.write("Upload PDF and chat with AI")
+    
+    if st.button("🧹 Clear Chat"):
+        st.session_state.messages = []
+
+st.title("🚀 AI Study Assistant (Level-8)")
+
+# Welcome message
+st.markdown("👋 Welcome! Ask anything or upload a PDF.")
 
 # Session state
 if "db" not in st.session_state:
@@ -22,7 +36,7 @@ if "db" not in st.session_state:
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# 🔥 CACHE PDF PROCESSING
+# PDF processing (cached)
 @st.cache_resource
 def process_pdfs(uploaded_files):
     documents = []
@@ -48,39 +62,45 @@ if uploaded_files:
     st.session_state.db = process_pdfs(uploaded_files)
     st.success("✅ PDFs processed!")
 
-# Show chat history
+# Show chat
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
-        st.write(msg["content"])
+        st.markdown(msg["content"])
 
 # Chat input
 user_input = st.chat_input("💬 Ask anything...")
 
+# Function to create PDF
+def create_pdf(text):
+    file_path = "output.pdf"
+    doc = SimpleDocTemplate(file_path)
+    styles = getSampleStyleSheet()
+    content = [Paragraph(text, styles["Normal"])]
+    doc.build(content)
+    return file_path
+
 if user_input:
 
-    # Show user message
+    # Show user
     st.session_state.messages.append({"role": "user", "content": user_input})
     with st.chat_message("user"):
         st.write(user_input)
 
-    # 🕒 Time feature
+    # Time feature
     if "time" in user_input.lower():
         answer = datetime.datetime.now().strftime("⏰ %H:%M:%S")
 
     else:
         answer = ""
 
-        # PDF logic
         if st.session_state.db is not None:
-
             docs = st.session_state.db.similarity_search(user_input, k=1)
 
             if docs and len(docs[0].page_content) > 150:
-
                 context = docs[0].page_content
 
                 prompt = f"""
-                Answer ONLY from the context.
+                Answer ONLY from context.
                 If not found, say NOT FOUND.
 
                 Context:
@@ -98,7 +118,6 @@ if user_input:
 
                 answer = response.choices[0].message.content
 
-                # fallback
                 if "NOT FOUND" in answer:
                     with st.spinner("⚡ Thinking..."):
                         response = client.chat.completions.create(
@@ -123,9 +142,14 @@ if user_input:
                 )
             answer = response.choices[0].message.content
 
-    # Show AI response
+    # Show AI
     with st.chat_message("assistant"):
-        st.write(answer)
+        st.markdown(answer)
 
-    # Save AI message
+        # 📥 Download button
+        pdf_file = create_pdf(answer)
+        with open(pdf_file, "rb") as f:
+            st.download_button("📥 Download Answer", f, file_name="answer.pdf")
+
+    # Save
     st.session_state.messages.append({"role": "assistant", "content": answer})
