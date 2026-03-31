@@ -11,7 +11,7 @@ from langchain_text_splitters import CharacterTextSplitter
 from langchain_community.vectorstores import FAISS
 from langchain_community.embeddings import HuggingFaceEmbeddings
 
-# API
+# API KEY (from Streamlit secrets)
 client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
 st.set_page_config(page_title="AI Study Assistant", layout="wide")
@@ -19,15 +19,11 @@ st.set_page_config(page_title="AI Study Assistant", layout="wide")
 # Sidebar
 with st.sidebar:
     st.title("⚙️ Settings")
-    st.write("Upload PDF and chat with AI")
-    
     if st.button("🧹 Clear Chat"):
         st.session_state.messages = []
 
-st.title("🚀 AI Study Assistant (Level-8)")
-
-# Welcome message
-st.markdown("👋 Welcome! Ask anything or upload a PDF.")
+st.title("🚀 AI Study Assistant ")
+st.markdown("👋 Upload a PDF or ask anything!")
 
 # Session state
 if "db" not in st.session_state:
@@ -36,7 +32,7 @@ if "db" not in st.session_state:
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# PDF processing (cached)
+# Cache PDF processing
 @st.cache_resource
 def process_pdfs(uploaded_files):
     documents = []
@@ -55,7 +51,7 @@ def process_pdfs(uploaded_files):
 
     return db
 
-# Upload PDFs
+# Upload PDF
 uploaded_files = st.file_uploader("📄 Upload PDFs", type="pdf", accept_multiple_files=True)
 
 if uploaded_files:
@@ -67,19 +63,23 @@ for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
-# Chat input
-user_input = st.chat_input("💬 Ask anything...")
-
-# Function to create PDF
+# PDF generator
 def create_pdf(text):
-    file_path = "output.pdf"
+    file_path = "answer.pdf"
     doc = SimpleDocTemplate(file_path)
     styles = getSampleStyleSheet()
     content = [Paragraph(text, styles["Normal"])]
     doc.build(content)
     return file_path
 
+# Chat input
+user_input = st.chat_input("💬 Ask anything...")
+
 if user_input:
+
+    if not user_input.strip():
+        st.warning("Please enter a question")
+        st.stop()
 
     # Show user
     st.session_state.messages.append({"role": "user", "content": user_input})
@@ -93,60 +93,48 @@ if user_input:
     else:
         answer = ""
 
-        if st.session_state.db is not None:
-            docs = st.session_state.db.similarity_search(user_input, k=1)
+        try:
+            if st.session_state.db is not None:
 
-            if docs and len(docs[0].page_content) > 150:
-                context = docs[0].page_content
+                docs = st.session_state.db.similarity_search(user_input, k=1)
 
-                prompt = f"""
-                Answer ONLY from context.
-                If not found, say NOT FOUND.
+                if docs:
+                    # 🔥 LIMIT CONTEXT SIZE
+                    context = docs[0].page_content[:1500]
 
-                Context:
-                {context}
+                    prompt = f"""
+Use the context if relevant, otherwise answer normally.
 
-                Question:
-                {user_input}
-                """
+Context:
+{context}
 
-                with st.spinner("⚡ AI thinking..."):
-                    response = client.chat.completions.create(
-                        model="llama3-8b-8192",
-                        messages=[{"role": "user", "content": prompt}]
-                    )
+Question:
+{user_input}
+"""
 
-                answer = response.choices[0].message.content
-
-                if "NOT FOUND" in answer:
-                    with st.spinner("⚡ Thinking..."):
-                        response = client.chat.completions.create(
-                            model="llama3-8b-8192",
-                            messages=[{"role": "user", "content": user_input}]
-                        )
-                    answer = response.choices[0].message.content
+                else:
+                    prompt = user_input
 
             else:
-                with st.spinner("⚡ Thinking..."):
-                    response = client.chat.completions.create(
-                        model="llama3-8b-8192",
-                        messages=[{"role": "user", "content": user_input}]
-                    )
-                answer = response.choices[0].message.content
+                prompt = user_input
 
-        else:
-            with st.spinner("⚡ Thinking..."):
+            # 🔥 SAFE API CALL
+            with st.spinner("⚡ AI thinking..."):
                 response = client.chat.completions.create(
                     model="llama3-8b-8192",
-                    messages=[{"role": "user", "content": user_input}]
+                    messages=[{"role": "user", "content": prompt[:2000]}]
                 )
+
             answer = response.choices[0].message.content
+
+        except Exception as e:
+            answer = "❌ Error occurred. Try smaller PDF or question."
 
     # Show AI
     with st.chat_message("assistant"):
         st.markdown(answer)
 
-        # 📥 Download button
+        # Download PDF
         pdf_file = create_pdf(answer)
         with open(pdf_file, "rb") as f:
             st.download_button("📥 Download Answer", f, file_name="answer.pdf")
