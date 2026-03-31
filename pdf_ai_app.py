@@ -18,7 +18,7 @@ with st.sidebar:
     if st.button("🧹 Clear Chat"):
         st.session_state.messages = []
 
-st.title("🚀 AI Study Assistant (FINAL)")
+st.title("🚀 AI Study Assistant")
 st.markdown("💬 Ask anything or upload a PDF!")
 
 # Memory
