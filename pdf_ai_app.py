@@ -100,7 +100,7 @@ if user_input:
 
                 if docs:
                     # 🔥 LIMIT CONTEXT SIZE
-                    context = docs[0].page_content[:1500]
+                    context = docs[0].page_content[:500]
 
                     prompt = f"""
 Use the context if relevant, otherwise answer normally.
@@ -122,7 +122,7 @@ Question:
             with st.spinner("⚡ AI thinking..."):
                 response = client.chat.completions.create(
                     model="llama3-8b-8192",
-                    messages=[{"role": "user", "content": prompt[:2000]}]
+                    messages=[{"role": "user", "content": prompt[:1000]}]
                 )
 
             answer = response.choices[0].message.content
