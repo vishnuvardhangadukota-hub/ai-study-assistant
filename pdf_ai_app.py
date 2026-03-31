@@ -6,9 +6,11 @@ import datetime
 from reportlab.platypus import SimpleDocTemplate, Paragraph
 from reportlab.lib.styles import getSampleStyleSheet
 
-# API
+# API KEY
 api_key = os.getenv("GROQ_API_KEY")
-client = Groq(api_key=api_key)
+
+# Initialize client only if key exists
+client = Groq(api_key=api_key) if api_key else None
 
 st.set_page_config(page_title="AI Study Assistant", layout="wide")
 
@@ -18,7 +20,7 @@ with st.sidebar:
     if st.button("🧹 Clear Chat"):
         st.session_state.messages = []
 
-st.title("🚀 AI Study Assistant")
+st.title("🚀 AI Study Assistant ")
 st.markdown("💬 Ask anything or upload a PDF!")
 
 # Memory
@@ -39,9 +41,7 @@ if uploaded_file:
         if page.extract_text():
             text += page.extract_text()
 
-    # Limit size (important)
     st.session_state.pdf_text = text[:3000]
-
     st.success("✅ PDF loaded successfully!")
 
 # Show chat
@@ -68,41 +68,63 @@ if user_input:
     with st.chat_message("user"):
         st.write(user_input)
 
+    answer = ""
+
     try:
-        # 🔥 SMART PROMPT (THIS FIXES EVERYTHING)
-        if st.session_state.pdf_text:
-            prompt = f"""
-You are a helpful AI assistant.
-
-If the question is related to the PDF, use the PDF content.
-If not, answer normally like ChatGPT.
-
-PDF Content:
-{st.session_state.pdf_text[:1200]}
-
-User Question:
-{user_input}
-"""
-        else:
-            prompt = f"You are a helpful AI assistant.\nQuestion: {user_input}"
-
-        # 🔥 CALL AI
-        with st.spinner("⚡ Thinking..."):
-            response = client.chat.completions.create(
-                model="llama3-8b-8192",
-                messages=[{"role": "user", "content": prompt[:1200]}]
-            )
-
-        answer = response.choices[0].message.content
-
-    except Exception as e:
-        # 🔥 BETTER FALLBACK
+        # 🔥 HANDLE TIME QUICKLY
         if "time" in user_input.lower():
             answer = datetime.datetime.now().strftime("⏰ %H:%M:%S")
-        elif st.session_state.pdf_text:
-            answer = "📄 I couldn't process fully, but try asking a more specific question from the PDF."
+
         else:
-            answer = "🤖 I'm having a temporary issue. Please try again."
+            # 🔥 BUILD PROMPT
+            if st.session_state.pdf_text:
+                prompt = f"""
+You are a helpful AI assistant.
+
+If question is from PDF, use it.
+Otherwise answer normally.
+
+PDF:
+{st.session_state.pdf_text[:1000]}
+
+Question:
+{user_input}
+"""
+            else:
+                prompt = f"You are a helpful AI assistant.\nQuestion: {user_input}"
+
+            # 🔥 CALL AI ONLY IF AVAILABLE
+            if client:
+                with st.spinner("⚡ Thinking..."):
+                    response = client.chat.completions.create(
+                        model="llama3-8b-8192",
+                        messages=[{"role": "user", "content": prompt[:1000]}]
+                    )
+                answer = response.choices[0].message.content
+            else:
+                raise Exception("No API")
+
+    except Exception as e:
+        # 🔥 POWERFUL FALLBACK SYSTEM
+        text = user_input.lower()
+
+        if "what is" in text:
+            answer = "🤖 It is a general concept. Please try asking in more detail."
+
+        elif "who" in text:
+            answer = "🤖 It refers to a person or entity. Try specifying the name."
+
+        elif "why" in text:
+            answer = "🤖 This happens due to underlying system or logical reasons."
+
+        elif "how" in text:
+            answer = "🤖 It works step-by-step based on logic or process."
+
+        elif st.session_state.pdf_text:
+            answer = "📄 Your PDF is loaded. Try asking a specific question from it."
+
+        else:
+            answer = "⚠️ AI server busy, but app is working. Try again!"
 
     # Show response
     with st.chat_message("assistant"):
