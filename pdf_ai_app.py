@@ -7,7 +7,8 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph
 from reportlab.lib.styles import getSampleStyleSheet
 
 # API
-client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+api_key = os.getenv("GROQ_API_KEY")
+client = Groq(api_key=api_key)
 
 st.set_page_config(page_title="AI Study Assistant", layout="wide")
 
@@ -17,8 +18,8 @@ with st.sidebar:
     if st.button("🧹 Clear Chat"):
         st.session_state.messages = []
 
-st.title("🚀 AI Study Assistant ")
-st.markdown("👋 Upload a PDF or ask anything!")
+st.title("🚀 AI Study Assistant (FINAL)")
+st.markdown("💬 Ask anything or upload a PDF!")
 
 # Memory
 if "messages" not in st.session_state:
@@ -35,9 +36,10 @@ if uploaded_file:
     text = ""
 
     for page in pdf_reader.pages:
-        text += page.extract_text()
+        if page.extract_text():
+            text += page.extract_text()
 
-    # 🔥 LIMIT TEXT SIZE (VERY IMPORTANT)
+    # Limit size (important)
     st.session_state.pdf_text = text[:3000]
 
     st.success("✅ PDF loaded successfully!")
@@ -62,26 +64,30 @@ user_input = st.chat_input("💬 Ask anything...")
 if user_input:
 
     st.session_state.messages.append({"role": "user", "content": user_input})
+
     with st.chat_message("user"):
         st.write(user_input)
 
     try:
-        # 🔥 BUILD PROMPT (SMART + SAFE)
+        # 🔥 SMART PROMPT (THIS FIXES EVERYTHING)
         if st.session_state.pdf_text:
             prompt = f"""
-Use the PDF content if useful, otherwise answer normally.
+You are a helpful AI assistant.
+
+If the question is related to the PDF, use the PDF content.
+If not, answer normally like ChatGPT.
 
 PDF Content:
-{st.session_state.pdf_text[:1500]}
+{st.session_state.pdf_text[:1200]}
 
-Question:
+User Question:
 {user_input}
 """
         else:
-            prompt = user_input
+            prompt = f"You are a helpful AI assistant.\nQuestion: {user_input}"
 
-        # 🔥 SINGLE FAST API CALL
-        with st.spinner("⚡ AI thinking..."):
+        # 🔥 CALL AI
+        with st.spinner("⚡ Thinking..."):
             response = client.chat.completions.create(
                 model="llama3-8b-8192",
                 messages=[{"role": "user", "content": prompt[:1200]}]
@@ -90,9 +96,15 @@ Question:
         answer = response.choices[0].message.content
 
     except Exception as e:
-        answer = "⚠️ Temporary issue. Please try again."
+        # 🔥 BETTER FALLBACK
+        if "time" in user_input.lower():
+            answer = datetime.datetime.now().strftime("⏰ %H:%M:%S")
+        elif st.session_state.pdf_text:
+            answer = "📄 I couldn't process fully, but try asking a more specific question from the PDF."
+        else:
+            answer = "🤖 I'm having a temporary issue. Please try again."
 
-    # Show AI
+    # Show response
     with st.chat_message("assistant"):
         st.markdown(answer)
 
