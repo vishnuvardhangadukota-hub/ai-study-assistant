@@ -11,7 +11,7 @@ from langchain_text_splitters import CharacterTextSplitter
 from langchain_community.vectorstores import FAISS
 from langchain_community.embeddings import HuggingFaceEmbeddings
 
-# API KEY (from Streamlit secrets)
+# API KEY
 client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
 st.set_page_config(page_title="AI Study Assistant", layout="wide")
@@ -22,7 +22,7 @@ with st.sidebar:
     if st.button("🧹 Clear Chat"):
         st.session_state.messages = []
 
-st.title("🚀 AI Study Assistant ")
+st.title("🚀 AI Study Assistant (Stable Version)")
 st.markdown("👋 Upload a PDF or ask anything!")
 
 # Session state
@@ -51,19 +51,19 @@ def process_pdfs(uploaded_files):
 
     return db
 
-# Upload PDF
+# Upload PDFs
 uploaded_files = st.file_uploader("📄 Upload PDFs", type="pdf", accept_multiple_files=True)
 
 if uploaded_files:
     st.session_state.db = process_pdfs(uploaded_files)
     st.success("✅ PDFs processed!")
 
-# Show chat
+# Show chat history
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
-# PDF generator
+# Create PDF file
 def create_pdf(text):
     file_path = "answer.pdf"
     doc = SimpleDocTemplate(file_path)
@@ -81,7 +81,7 @@ if user_input:
         st.warning("Please enter a question")
         st.stop()
 
-    # Show user
+    # Show user message
     st.session_state.messages.append({"role": "user", "content": user_input})
     with st.chat_message("user"):
         st.write(user_input)
@@ -99,26 +99,35 @@ if user_input:
                 docs = st.session_state.db.similarity_search(user_input, k=1)
 
                 if docs:
-                    # 🔥 LIMIT CONTEXT SIZE
-                    context = docs[0].page_content[:500]
+                    raw_text = docs[0].page_content[:1000]
 
+                    # 🔥 STEP 1: Summarize PDF chunk
+                    summary_prompt = f"Summarize this in 3 short lines:\n{raw_text[:500]}"
+
+                    summary_response = client.chat.completions.create(
+                        model="llama3-8b-8192",
+                        messages=[{"role": "user", "content": summary_prompt}]
+                    )
+
+                    short_context = summary_response.choices[0].message.content
+
+                    # 🔥 STEP 2: Use summarized context
                     prompt = f"""
-Use the context if relevant, otherwise answer normally.
+Use this context to answer the question.
 
 Context:
-{context}
+{short_context}
 
 Question:
 {user_input}
 """
-
                 else:
                     prompt = user_input
 
             else:
                 prompt = user_input
 
-            # 🔥 SAFE API CALL
+            # 🔥 FINAL SAFE CALL
             with st.spinner("⚡ AI thinking..."):
                 response = client.chat.completions.create(
                     model="llama3-8b-8192",
@@ -127,10 +136,10 @@ Question:
 
             answer = response.choices[0].message.content
 
-        except Exception as e:
-            answer = "❌ Error occurred. Try smaller PDF or question."
+        except Exception:
+            answer = "❌ Error occurred. Try a smaller question or different PDF."
 
-    # Show AI
+    # Show AI response
     with st.chat_message("assistant"):
         st.markdown(answer)
 
@@ -139,5 +148,5 @@ Question:
         with open(pdf_file, "rb") as f:
             st.download_button("📥 Download Answer", f, file_name="answer.pdf")
 
-    # Save
+    # Save chat
     st.session_state.messages.append({"role": "assistant", "content": answer})
