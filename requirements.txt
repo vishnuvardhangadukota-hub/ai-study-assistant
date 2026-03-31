@@ -1,4 +1,4 @@
 streamlit
-groq
+openai
 PyPDF2
 reportlab

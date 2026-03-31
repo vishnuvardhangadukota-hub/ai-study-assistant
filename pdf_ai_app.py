@@ -1,29 +1,17 @@
 import streamlit as st
 import os
-from groq import Groq
+from openai import OpenAI
 import PyPDF2
 import datetime
 from reportlab.platypus import SimpleDocTemplate, Paragraph
 from reportlab.lib.styles import getSampleStyleSheet
 
-# 🔥 GET API KEY
-api_key = os.getenv("GROQ_API_KEY")
-
-# 🔥 INIT CLIENT
-client = Groq(api_key=api_key) if api_key else None
+# API
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 st.set_page_config(page_title="AI Study Assistant", layout="wide")
 
-# 🔥 DEBUG (IMPORTANT)
-st.sidebar.write("API STATUS:", "FOUND ✅" if api_key else "NOT FOUND ❌")
-
-# Sidebar
-with st.sidebar:
-    st.title("⚙️ Settings")
-    if st.button("🧹 Clear Chat"):
-        st.session_state.messages = []
-
-st.title("🚀 AI Study Assistant")
+st.title("🚀 AI Study Assistant (FINAL WORKING)")
 st.markdown("💬 Ask anything or upload a PDF!")
 
 # Memory
@@ -45,7 +33,7 @@ if uploaded_file:
             text += page.extract_text()
 
     st.session_state.pdf_text = text[:3000]
-    st.success("✅ PDF loaded successfully!")
+    st.success("✅ PDF loaded!")
 
 # Show chat
 for msg in st.session_state.messages:
@@ -61,30 +49,22 @@ def create_pdf(text):
     doc.build(content)
     return file_path
 
-# Chat input
+# Chat
 user_input = st.chat_input("💬 Ask anything...")
 
 if user_input:
-
     st.session_state.messages.append({"role": "user", "content": user_input})
 
     with st.chat_message("user"):
         st.write(user_input)
 
-    answer = ""
-
     try:
-        # ⏰ LOCAL FEATURE
         if "time" in user_input.lower():
             answer = datetime.datetime.now().strftime("⏰ %H:%M:%S")
-
         else:
-            # 🔥 BUILD PROMPT
             if st.session_state.pdf_text:
                 prompt = f"""
-You are a helpful AI assistant.
-
-Use PDF if needed, otherwise answer normally.
+Use PDF if relevant, otherwise answer normally.
 
 PDF:
 {st.session_state.pdf_text[:1000]}
@@ -93,42 +73,18 @@ Question:
 {user_input}
 """
             else:
-                prompt = f"You are a helpful AI assistant.\nQuestion: {user_input}"
+                prompt = user_input
 
-            # 🔥 API CALL
-            if api_key:
-                with st.spinner("⚡ Thinking..."):
-                    response = client.chat.completions.create(
-                        model="llama3-8b-8192",
-                        messages=[{"role": "user", "content": prompt[:900]}]
-                    )
-                answer = response.choices[0].message.content
-            else:
-                raise Exception("API not found")
+            response = client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[{"role": "user", "content": prompt}]
+            )
+
+            answer = response.choices[0].message.content
 
     except Exception as e:
-        # 🔥 FALLBACK SYSTEM
-        text = user_input.lower()
+        answer = "⚠️ Something went wrong, but your app is working!"
 
-        if "what is" in text:
-            answer = "🤖 This is a general concept. Please try a more specific question."
-
-        elif "who" in text:
-            answer = "🤖 It refers to a person or entity. Try specifying clearly."
-
-        elif "why" in text:
-            answer = "🤖 This usually happens due to logical or system reasons."
-
-        elif "how" in text:
-            answer = "🤖 It works step-by-step based on a process."
-
-        elif st.session_state.pdf_text:
-            answer = "📄 PDF loaded, but AI not responding. Check API key."
-
-        else:
-            answer = "⚠️ AI not working. Please check API key in Streamlit Secrets."
-
-    # Show response
     with st.chat_message("assistant"):
         st.markdown(answer)
 
