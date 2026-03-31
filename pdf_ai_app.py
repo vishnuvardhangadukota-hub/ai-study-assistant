@@ -6,13 +6,16 @@ import datetime
 from reportlab.platypus import SimpleDocTemplate, Paragraph
 from reportlab.lib.styles import getSampleStyleSheet
 
-# API KEY
+# 🔥 GET API KEY
 api_key = os.getenv("GROQ_API_KEY")
 
-# Initialize client only if key exists
+# 🔥 INIT CLIENT
 client = Groq(api_key=api_key) if api_key else None
 
 st.set_page_config(page_title="AI Study Assistant", layout="wide")
+
+# 🔥 DEBUG (IMPORTANT)
+st.sidebar.write("API STATUS:", "FOUND ✅" if api_key else "NOT FOUND ❌")
 
 # Sidebar
 with st.sidebar:
@@ -20,7 +23,7 @@ with st.sidebar:
     if st.button("🧹 Clear Chat"):
         st.session_state.messages = []
 
-st.title("🚀 AI Study Assistant ")
+st.title("🚀 AI Study Assistant")
 st.markdown("💬 Ask anything or upload a PDF!")
 
 # Memory
@@ -71,7 +74,7 @@ if user_input:
     answer = ""
 
     try:
-        # 🔥 HANDLE TIME QUICKLY
+        # ⏰ LOCAL FEATURE
         if "time" in user_input.lower():
             answer = datetime.datetime.now().strftime("⏰ %H:%M:%S")
 
@@ -81,8 +84,7 @@ if user_input:
                 prompt = f"""
 You are a helpful AI assistant.
 
-If question is from PDF, use it.
-Otherwise answer normally.
+Use PDF if needed, otherwise answer normally.
 
 PDF:
 {st.session_state.pdf_text[:1000]}
@@ -93,44 +95,43 @@ Question:
             else:
                 prompt = f"You are a helpful AI assistant.\nQuestion: {user_input}"
 
-            # 🔥 CALL AI ONLY IF AVAILABLE
-            if client:
+            # 🔥 API CALL
+            if api_key:
                 with st.spinner("⚡ Thinking..."):
                     response = client.chat.completions.create(
                         model="llama3-8b-8192",
-                        messages=[{"role": "user", "content": prompt[:1000]}]
+                        messages=[{"role": "user", "content": prompt[:900]}]
                     )
                 answer = response.choices[0].message.content
             else:
-                raise Exception("No API")
+                raise Exception("API not found")
 
     except Exception as e:
-        # 🔥 POWERFUL FALLBACK SYSTEM
+        # 🔥 FALLBACK SYSTEM
         text = user_input.lower()
 
         if "what is" in text:
-            answer = "🤖 It is a general concept. Please try asking in more detail."
+            answer = "🤖 This is a general concept. Please try a more specific question."
 
         elif "who" in text:
-            answer = "🤖 It refers to a person or entity. Try specifying the name."
+            answer = "🤖 It refers to a person or entity. Try specifying clearly."
 
         elif "why" in text:
-            answer = "🤖 This happens due to underlying system or logical reasons."
+            answer = "🤖 This usually happens due to logical or system reasons."
 
         elif "how" in text:
-            answer = "🤖 It works step-by-step based on logic or process."
+            answer = "🤖 It works step-by-step based on a process."
 
         elif st.session_state.pdf_text:
-            answer = "📄 Your PDF is loaded. Try asking a specific question from it."
+            answer = "📄 PDF loaded, but AI not responding. Check API key."
 
         else:
-            answer = "⚠️ AI server busy, but app is working. Try again!"
+            answer = "⚠️ AI not working. Please check API key in Streamlit Secrets."
 
     # Show response
     with st.chat_message("assistant"):
         st.markdown(answer)
 
-        # Download
         pdf_file = create_pdf(answer)
         with open(pdf_file, "rb") as f:
             st.download_button("📥 Download Answer", f, file_name="answer.pdf")
