@@ -22,7 +22,7 @@ with st.sidebar:
     if st.button("🧹 Clear Chat"):
         st.session_state.messages = []
 
-st.title("🚀 AI Study Assistant (Stable Version)")
+st.title("🚀 AI Study Assistant ")
 st.markdown("👋 Upload a PDF or ask anything!")
 
 # Session state
@@ -99,20 +99,20 @@ if user_input:
                 docs = st.session_state.db.similarity_search(user_input, k=1)
 
                 if docs:
-                    raw_text = docs[0].page_content[:1000]
+    # 🔥 TAKE VERY SMALL SAFE TEXT
+    context = docs[0].page_content[:300]
 
-                    # 🔥 STEP 1: Summarize PDF chunk
-                    summary_prompt = f"Summarize this in 3 short lines:\n{raw_text[:500]}"
+    prompt = f"""
+Answer using this context if relevant, otherwise answer normally.
 
-                    summary_response = client.chat.completions.create(
-                        model="llama3-8b-8192",
-                        messages=[{"role": "user", "content": summary_prompt}]
-                    )
+Context:
+{context}
 
-                    short_context = summary_response.choices[0].message.content
-
-                    # 🔥 STEP 2: Use summarized context
-                    prompt = f"""
+Question:
+{user_input}
+"""
+else:
+    prompt = user_input
 Use this context to answer the question.
 
 Context:
@@ -131,7 +131,7 @@ Question:
             with st.spinner("⚡ AI thinking..."):
                 response = client.chat.completions.create(
                     model="llama3-8b-8192",
-                    messages=[{"role": "user", "content": prompt[:1000]}]
+                    messages=[{"role": "user", "content": prompt[:700]}]
                 )
 
             answer = response.choices[0].message.content
