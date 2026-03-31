@@ -99,24 +99,14 @@ if user_input:
                 docs = st.session_state.db.similarity_search(user_input, k=1)
 
                 if docs:
-    # 🔥 TAKE VERY SMALL SAFE TEXT
-    context = docs[0].page_content[:300]
+                    # 🔥 SAFE SMALL CONTEXT
+                    context = docs[0].page_content[:300]
 
-    prompt = f"""
+                    prompt = f"""
 Answer using this context if relevant, otherwise answer normally.
 
 Context:
 {context}
-
-Question:
-{user_input}
-"""
-else:
-    prompt = user_input
-Use this context to answer the question.
-
-Context:
-{short_context}
 
 Question:
 {user_input}
@@ -127,7 +117,7 @@ Question:
             else:
                 prompt = user_input
 
-            # 🔥 FINAL SAFE CALL
+            # 🔥 SINGLE SAFE API CALL
             with st.spinner("⚡ AI thinking..."):
                 response = client.chat.completions.create(
                     model="llama3-8b-8192",
@@ -136,8 +126,8 @@ Question:
 
             answer = response.choices[0].message.content
 
-        except Exception:
-            answer = "❌ Error occurred. Try a smaller question or different PDF."
+        except Exception as e:
+            answer = "❌ Error occurred. Please try again."
 
     # Show AI response
     with st.chat_message("assistant"):
