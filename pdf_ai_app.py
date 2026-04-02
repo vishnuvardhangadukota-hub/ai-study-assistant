@@ -1,95 +1,88 @@
 import streamlit as st
 import os
-from openai import OpenAI
-import PyPDF2
-import datetime
-from reportlab.platypus import SimpleDocTemplate, Paragraph
-from reportlab.lib.styles import getSampleStyleSheet
+from groq import Groq
+
+from langchain_community.document_loaders import PyPDFLoader
+from langchain_text_splitters import CharacterTextSplitter
+from langchain_community.vectorstores import FAISS
+from langchain_community.embeddings import HuggingFaceEmbeddings
+
+import tempfile
 
 # API
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+api_key = os.getenv("GROQ_API_KEY")
+client = Groq(api_key=api_key)
 
 st.set_page_config(page_title="AI Study Assistant", layout="wide")
+st.title("📚 AI Study Assistant")
 
-st.title("🚀 AI Study Assistant (FINAL WORKING)")
-st.markdown("💬 Ask anything or upload a PDF!")
+# Session
+if "db" not in st.session_state:
+    st.session_state.db = None
 
-# Memory
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-if "pdf_text" not in st.session_state:
-    st.session_state.pdf_text = ""
-
 # Upload PDF
-uploaded_file = st.file_uploader("📄 Upload PDF", type="pdf")
+uploaded_file = st.file_uploader("Upload PDF", type="pdf")
 
 if uploaded_file:
-    pdf_reader = PyPDF2.PdfReader(uploaded_file)
-    text = ""
+    with tempfile.NamedTemporaryFile(delete=False) as tmp:
+        tmp.write(uploaded_file.read())
+        loader = PyPDFLoader(tmp.name)
+        documents = loader.load()
 
-    for page in pdf_reader.pages:
-        if page.extract_text():
-            text += page.extract_text()
+    splitter = CharacterTextSplitter(chunk_size=500, chunk_overlap=50)
+    docs = splitter.split_documents(documents)
 
-    st.session_state.pdf_text = text[:3000]
-    st.success("✅ PDF loaded!")
+    embeddings = HuggingFaceEmbeddings()
+    db = FAISS.from_documents(docs, embeddings)
 
-# Show chat
+    st.session_state.db = db
+    st.success("PDF processed successfully!")
+
+# Chat history
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
-# PDF generator
-def create_pdf(text):
-    file_path = "answer.pdf"
-    doc = SimpleDocTemplate(file_path)
-    styles = getSampleStyleSheet()
-    content = [Paragraph(text, styles["Normal"])]
-    doc.build(content)
-    return file_path
+# Input
+query = st.chat_input("Ask something...")
 
-# Chat
-user_input = st.chat_input("💬 Ask anything...")
-
-if user_input:
-    st.session_state.messages.append({"role": "user", "content": user_input})
+if query:
+    st.session_state.messages.append({"role": "user", "content": query})
 
     with st.chat_message("user"):
-        st.write(user_input)
+        st.write(query)
 
     try:
-        if "time" in user_input.lower():
-            answer = datetime.datetime.now().strftime("⏰ %H:%M:%S")
-        else:
-            if st.session_state.pdf_text:
-                prompt = f"""
-Use PDF if relevant, otherwise answer normally.
+        if st.session_state.db:
+            docs = st.session_state.db.similarity_search(query, k=1)
+            context = docs[0].page_content[:500]
 
-PDF:
-{st.session_state.pdf_text[:1000]}
+            prompt = f"""
+Answer based on this context if relevant, else answer normally.
+
+Context:
+{context}
 
 Question:
-{user_input}
+{query}
 """
-            else:
-                prompt = user_input
+        else:
+            prompt = query
 
-            response = client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[{"role": "user", "content": prompt}]
-            )
+        response = client.chat.completions.create(
+            model="llama3-8b-8192",
+            messages=[{"role": "user", "content": prompt[:800]}]
+        )
 
-            answer = response.choices[0].message.content
+        answer = response.choices[0].message.content
 
-    except Exception as e:
-        answer = "⚠️ Something went wrong, but your app is working!"
+    except Exception:
+        answer = "⚠️ AI temporarily unavailable. Please try again."
 
     with st.chat_message("assistant"):
         st.markdown(answer)
-
-        pdf_file = create_pdf(answer)
-        with open(pdf_file, "rb") as f:
-            st.download_button("📥 Download Answer", f, file_name="answer.pdf")
 
     st.session_state.messages.append({"role": "assistant", "content": answer})
